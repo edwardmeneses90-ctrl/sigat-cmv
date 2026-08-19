@@ -4,6 +4,7 @@ import {
   Route,
   Routes,
 } from "react-router-dom";
+import { useState } from "react";
 
 import Sidebar from "./components/layout/Sidebar";
 import Header from "./components/layout/Header";
@@ -27,13 +28,20 @@ import SolicitudPublica from "./pages/SolicitudPublica";
 import SolicitudesServicio from "./pages/SolicitudesServicio";
 
 function PrivateLayout({ children }) {
+  const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
+
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-slate-100">
-        <Sidebar />
+        <Sidebar
+          mobileOpen={menuMovilAbierto}
+          onCloseMobile={() => setMenuMovilAbierto(false)}
+        />
 
         <div className="min-h-screen md:pl-64">
-          <Header />
+          <Header
+            onOpenMenu={() => setMenuMovilAbierto(true)}
+          />
 
           <main className="p-4 md:p-8">
             {children}

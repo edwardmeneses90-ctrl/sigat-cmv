@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
-export default function Header() {
+export default function Header({ onOpenMenu }) {
   const { perfil, cerrarSesion } = useAuth();
 
   const nombreCompleto = [
@@ -38,18 +38,20 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
-      <div className="flex h-20 items-center justify-between gap-4 px-4 md:px-8">
+      <div className="flex h-20 items-center justify-between gap-3 px-3 sm:px-4 md:px-8">
         <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
-            className="rounded-lg border border-slate-200 p-2 text-slate-600 md:hidden"
+            onClick={onOpenMenu}
+            className="inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white p-2.5 text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95 md:hidden"
             aria-label="Abrir menú"
+            title="Abrir menú"
           >
-            <Menu size={20} />
+            <Menu size={21} />
           </button>
 
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold text-slate-900">
+            <h1 className="truncate text-sm font-semibold text-slate-900 sm:text-lg">
               Sistema de Gestión de Activos Tecnológicos
             </h1>
 
@@ -59,7 +61,7 @@ export default function Header() {
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <div className="hidden items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 xl:flex">
             <Search size={17} className="text-slate-400" />
             <span className="text-sm text-slate-400">
@@ -84,7 +86,7 @@ export default function Header() {
             </p>
           </div>
 
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white sm:h-10 sm:w-10 sm:text-sm">
             {iniciales}
           </div>
 

@@ -26,6 +26,7 @@ import SoportesTecnicos from "./pages/SoportesTecnicos";
 import ConceptosBaja from "./pages/ConceptosBaja";
 import SolicitudPublica from "./pages/SolicitudPublica";
 import SolicitudesServicio from "./pages/SolicitudesServicio";
+import Backups from "./pages/Backups";
 
 function PrivateLayout({ children }) {
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
@@ -175,6 +176,15 @@ export default function App() {
             element={
               <PrivateLayout>
                 <SolicitudesServicio />
+              </PrivateLayout>
+            }
+          />
+
+          <Route
+            path="/backups"
+            element={
+              <PrivateLayout>
+                <Backups />
               </PrivateLayout>
             }
           />

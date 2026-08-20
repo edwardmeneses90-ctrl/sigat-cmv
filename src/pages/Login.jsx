@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Eye,
   EyeOff,
@@ -17,6 +17,24 @@ export default function Login() {
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    let activo = true;
+
+    async function verificarSesionExistente() {
+      const { data } = await supabase.auth.getSession();
+
+      if (activo && data?.session) {
+        navigate("/", { replace: true });
+      }
+    }
+
+    verificarSesionExistente();
+
+    return () => {
+      activo = false;
+    };
+  }, [navigate]);
 
   async function iniciarSesion(event) {
     event.preventDefault();
@@ -43,7 +61,15 @@ export default function Login() {
         throw authError;
       }
 
-      navigate("/", { replace: true });
+      // Confirmamos que Supabase persistió la sesión antes de entrar
+      // al área privada. Esto evita el rebote silencioso al Login.
+      const { data: sessionData } = await supabase.auth.getSession();
+
+      if (!sessionData?.session) {
+        throw new Error("La sesión no pudo inicializarse.");
+      }
+
+      window.location.replace("/");
     } catch {
       setError("Usuario o contraseña incorrectos.");
     } finally {
@@ -222,11 +248,8 @@ export default function Login() {
               </div>
 
               <div className="mt-6 border-t border-slate-200 pt-5 text-center">
-                <p className="text-xs leading-5 text-slate-400">
-                  Concejo Municipal de Villavicencio
-                </p>
-                <p className="mt-1 text-[11px] text-slate-400">
-                  Sistema de Gestión de Activos Tecnológicos
+                <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+                  Designed by: EGMS - FANM
                 </p>
               </div>
             </div>

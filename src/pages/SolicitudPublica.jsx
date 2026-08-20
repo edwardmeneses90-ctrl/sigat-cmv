@@ -85,7 +85,20 @@ export default function SolicitudPublica() {
       return;
     }
 
-    setTicket(data?.[0] || null);
+    const nuevoTicket = data?.[0] || null;
+    setTicket(nuevoTicket);
+
+    // La solicitud ya quedó registrada aunque el correo falle.
+    // La Edge Function es idempotente: un ticket se notifica una sola vez.
+    if (nuevoTicket?.id) {
+      supabase.functions
+        .invoke("notificar-ticket", {
+          body: { ticket_id: nuevoTicket.id },
+        })
+        .catch((notifyError) => {
+          console.warn("No se pudo enviar la notificación del ticket:", notifyError);
+        });
+    }
   }
 
   function nuevaSolicitud() {

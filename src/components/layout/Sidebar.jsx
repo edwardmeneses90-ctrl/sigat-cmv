@@ -337,6 +337,9 @@ export default function Sidebar({
           <p className="text-[9px] font-semibold uppercase tracking-wide text-blue-200/50">
             Designed by: EGMS - FANM
           </p>
+          <p className="text-[9px] font-semibold uppercase tracking-wide text-blue-200/50">
+            Version 1.3
+          </p>
         </div>
       </div>
     </>

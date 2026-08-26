@@ -251,6 +251,9 @@ export default function Login() {
                 <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">
                   Designed by: EGMS - FANM
                 </p>
+                <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+                  Version 1.3
+                </p>
               </div>
             </div>
           </div>

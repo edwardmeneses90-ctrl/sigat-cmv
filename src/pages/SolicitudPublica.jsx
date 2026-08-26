@@ -16,6 +16,7 @@ export default function SolicitudPublica() {
   const [activos, setActivos] = useState([]);
   const [form, setForm] = useState(INICIAL);
   const [busqueda, setBusqueda] = useState("");
+  const [grupoFuncionario, setGrupoFuncionario] = useState("TODOS");
   const [cargando, setCargando] = useState(true);
   const [cargandoActivos, setCargandoActivos] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -54,11 +55,35 @@ export default function SolicitudPublica() {
 
   const personasFiltradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    if (!q) return personas;
-    return personas.filter((p) =>
-      [p.nombre, p.dependencia].filter(Boolean).join(" ").toLowerCase().includes(q),
-    );
-  }, [personas, busqueda]);
+
+    return personas.filter((p) => {
+      const cargo = (p.cargo || "").toLowerCase();
+
+      const esConcejal = cargo.includes("concejal");
+
+      const coincideGrupo =
+        grupoFuncionario === "TODOS"
+          ? true
+          : grupoFuncionario === "CONCEJALES"
+            ? esConcejal
+            : !esConcejal;
+
+      const coincideBusqueda =
+        !q ||
+        [
+          p.nombre,
+          p.dependencia,
+          p.cargo,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(q);
+
+      return coincideGrupo && coincideBusqueda;
+    });
+
+    }, [personas, busqueda, grupoFuncionario]);
 
   async function enviar(e) {
     e.preventDefault();
@@ -163,6 +188,34 @@ export default function SolicitudPublica() {
                 <Search size={17} className="text-slate-400" />
                 <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Escribe tu nombre para buscar..." className="w-full py-2.5 text-sm outline-none" />
               </div>
+              <select
+                value={grupoFuncionario}
+                onChange={(e) => {
+                  setGrupoFuncionario(e.target.value);
+
+                  setForm((prev) => ({
+                    ...prev,
+                    solicitante_id: "",
+                    activo_id: "",
+                  }));
+
+                  setActivos([]);
+                }}
+                className="mb-2 w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
+              >
+                <option value="TODOS">
+                  Todos los funcionarios
+                </option>
+
+                <option value="CONCEJALES">
+                  Concejales
+                </option>
+
+                <option value="ADMINISTRATIVOS">
+                  Administrativos
+                </option>
+
+              </select>
               <select value={form.solicitante_id} onChange={(e) => cambiarSolicitante(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500" required>
                 <option value="">Selecciona tu nombre...</option>
                 {personasFiltradas.map((p) => <option key={p.id} value={p.id}>{p.nombre}{p.dependencia ? ` — ${p.dependencia}` : ""}</option>)}

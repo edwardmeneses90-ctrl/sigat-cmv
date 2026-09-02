@@ -252,7 +252,7 @@ export default function Login() {
                   Designed by: EGMS - FANM
                 </p>
                 <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">
-                  Version 1.4
+                  Version 1.4.1
                 </p>
               </div>
             </div>

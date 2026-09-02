@@ -19,6 +19,7 @@ export default function SolicitudesServicio() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [ticketAsignar, setTicketAsignar] = useState(null);
+  const [ticketDetalle, setTicketDetalle] = useState(null);
   const [tecnicoSeleccionado, setTecnicoSeleccionado] = useState("");
 
   useEffect(() => { cargar(); }, []);
@@ -152,7 +153,11 @@ export default function SolicitudesServicio() {
                         </div>
                       )}
                     </td>
-                    <td className="px-1.5 py-1.5 text-xs font-bold text-blue-700">{item.numero_ticket}</td>
+                    <td className="px-1.5 py-1.5 text-xs font-bold text-blue-700">
+                      <button onClick={() => setTicketDetalle(item)} className="underline hover:text-blue-900">
+                        {item.numero_ticket}
+                      </button>
+                    </td>
                     <td className="px-1.5 py-1.5 text-xs text-slate-600">{new Date(item.fecha_solicitud).toLocaleString("es-CO")}</td>
                     <td className="px-1.5 py-1.5 text-xs text-slate-700"><strong>{item.solicitante_nombre}</strong><div className="truncate text-[11px] text-slate-500">{item.descripcion}</div></td>
                     <td className="px-1.5 py-1.5 text-xs text-slate-600 truncate">{item.dependencia_nombre || "—"}</td>
@@ -178,6 +183,29 @@ export default function SolicitudesServicio() {
             <div className="flex justify-end gap-2">
               <button onClick={()=>setTicketAsignar(null)} className="rounded-lg bg-slate-100 px-4 py-2 text-sm">Cancelar</button>
               <button onClick={guardarAsignacion} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white">Asignar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {ticketDetalle && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-900">Detalle ticket {ticketDetalle.numero_ticket}</h2>
+              <button onClick={() => setTicketDetalle(null)} className="rounded-lg bg-slate-100 px-3 py-1 text-sm">Cerrar</button>
+            </div>
+            <div className="grid gap-3 text-sm">
+              <div><strong>Estado:</strong> {estadoLabel(ticketDetalle.estado)}</div>
+              <div><strong>Fecha:</strong> {new Date(ticketDetalle.fecha_solicitud).toLocaleString("es-CO")}</div>
+              <div><strong>Solicitante:</strong> {ticketDetalle.solicitante_nombre || "—"}</div>
+              <div><strong>Dependencia:</strong> {ticketDetalle.dependencia_nombre || "—"}</div>
+              <div><strong>Activo:</strong> {ticketDetalle.placa_inventario || "—"}</div>
+              <div><strong>Tipo:</strong> {ticketDetalle.tipo || "—"}</div>
+              <div><strong>Asunto:</strong> {ticketDetalle.asunto || "—"}</div>
+              <div><strong>Descripción:</strong><p className="mt-1 rounded bg-slate-50 p-3">{ticketDetalle.descripcion || "—"}</p></div>
+              <div><strong>Técnico asignado:</strong> {ticketDetalle.tecnico_asignado_nombre || "—"}</div>
+              <div><strong>Observación cierre/cancelación:</strong><p className="mt-1 rounded bg-slate-50 p-3">{ticketDetalle.observaciones_cierre || "—"}</p></div>
             </div>
           </div>
         </div>

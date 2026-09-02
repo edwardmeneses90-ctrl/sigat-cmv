@@ -196,6 +196,31 @@ export default function Configuracion() {
     await cargarUsuarios();
   }
 
+  const [usuarioReset, setUsuarioReset] = useState(null);
+  const [nuevaClave, setNuevaClave] = useState("");
+
+  async function restablecerClave() {
+    setError("");
+    setMensaje("");
+
+    const { data, error: fnError } =
+      await supabase.functions.invoke("reset-password", {
+        body: {
+          user_id: usuarioReset.id,
+          password: nuevaClave,
+        },
+      });
+
+    if (fnError || data?.error) {
+      setError(fnError?.message || data.error);
+      return;
+    }
+
+    setMensaje(`Contraseña de ${usuarioReset.usuario} actualizada.`);
+    setUsuarioReset(null);
+    setNuevaClave("");
+  }
+
   const filtrados = useMemo(() => {
     const texto = busqueda
       .trim()
@@ -445,6 +470,23 @@ export default function Configuracion() {
           </form>
         )}
 
+        {usuarioReset && (
+          <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-5">
+            <h3 className="font-semibold">Restablecer contraseña</h3>
+            <input
+              type="password"
+              value={nuevaClave}
+              onChange={(e)=>setNuevaClave(e.target.value)}
+              placeholder="Nueva contraseña"
+              className="mt-3 w-full rounded-xl border px-3 py-2"
+            />
+            <div className="mt-3 flex gap-2">
+              <button onClick={()=>setUsuarioReset(null)} className="rounded-lg border px-3 py-2">Cancelar</button>
+              <button onClick={restablecerClave} className="rounded-lg bg-blue-600 px-3 py-2 text-white">Guardar</button>
+            </div>
+          </div>
+        )}
+
         <div className="mt-6 overflow-x-auto rounded-xl border border-slate-200">
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50">
@@ -547,6 +589,14 @@ export default function Configuracion() {
                     </td>
 
                     <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => setUsuarioReset(usuario)}
+                        className="mr-2 rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-600"
+                      >
+                        Reset clave
+                      </button>
+
                       <button
                         type="button"
                         onClick={() =>

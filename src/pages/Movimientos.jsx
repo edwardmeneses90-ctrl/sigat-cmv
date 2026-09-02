@@ -134,6 +134,25 @@ export default function Movimientos() {
     (item) => item.id === formulario.activo_id,
   );
 
+
+  const activosFiltrados = useMemo(() => {
+    const texto = busqueda.trim().toLowerCase();
+
+    if (!texto) return activos;
+
+    return activos.filter((activo) =>
+      [
+        activo.codigo,
+        activo.serial,
+        activo.modelo,
+        activo.tipos_activo?.nombre,
+        activo.marcas?.nombre,
+      ].some((valor) =>
+        String(valor ?? "").toLowerCase().includes(texto),
+      ),
+    ).slice(0, 50);
+  }, [activos, busqueda]);
+
   function actualizarCampo(key, valor) {
     setFormulario((actual) => ({
       ...actual,
@@ -278,6 +297,14 @@ export default function Movimientos() {
             <div className="mt-5 space-y-4">
               <label className="block text-sm font-medium text-slate-700">
                 Activo *
+                <input
+                  type="text"
+                  value={busqueda}
+                  onChange={(event) => setBusqueda(event.target.value)}
+                  placeholder="Buscar por placa, serial o modelo..."
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                />
+
                 <select
                   required
                   value={formulario.activo_id}
@@ -293,13 +320,13 @@ export default function Movimientos() {
                     Seleccionar activo
                   </option>
 
-                  {activos.map((activo) => (
+                  {activosFiltrados.map((activo) => (
                     <option
                       key={activo.id}
                       value={activo.id}
                     >
                       {activo.codigo} —{" "}
-                      {activo.tipos_activo?.nombre || ""}
+                      {activo.modelo || activo.tipos_activo?.nombre || ""}
                     </option>
                   ))}
                 </select>

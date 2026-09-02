@@ -18,6 +18,8 @@ export default function SolicitudesServicio() {
   const [estado, setEstado] = useState("");
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
+  const [ticketAsignar, setTicketAsignar] = useState(null);
+  const [tecnicoSeleccionado, setTecnicoSeleccionado] = useState("");
 
   useEffect(() => { cargar(); }, []);
 
@@ -48,6 +50,18 @@ export default function SolicitudesServicio() {
       fecha_asignacion: tecnicoId ? new Date().toISOString() : null,
       estado: tecnicoId ? "ASIGNADA" : "PENDIENTE",
     });
+  }
+
+  function abrirAsignacion(item) {
+    setTicketAsignar(item);
+    setTecnicoSeleccionado(item.tecnico_asignado_id || "");
+  }
+
+  async function guardarAsignacion() {
+    if (!ticketAsignar || !tecnicoSeleccionado) return;
+    await asignar(ticketAsignar, tecnicoSeleccionado);
+    setTicketAsignar(null);
+    setTecnicoSeleccionado("");
   }
 
   async function iniciar(item) {
@@ -86,7 +100,7 @@ export default function SolicitudesServicio() {
         <p className="mt-2 text-sm text-slate-500">Bandeja central de solicitudes de soporte y mantenimiento registradas por los funcionarios.</p>
       </section>
 
-      {error && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      {error && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-2 py-2 text-sm text-red-700">{error}</div>}
 
       <section className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {resumen.map((r) => (
@@ -115,45 +129,60 @@ export default function SolicitudesServicio() {
           <div className="flex items-center justify-center gap-2 py-16 text-slate-500"><Loader2 size={20} className="animate-spin" /> Cargando solicitudes...</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50"><tr>{["Ticket","Fecha","Solicitante","Dependencia","Activo","Tipo / Asunto","Estado","Técnico","Acciones"].map((h) => <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{h}</th>)}</tr></thead>
+            <table className="w-full table-fixed divide-y divide-slate-200">
+              <thead className="bg-slate-50">
+                <tr>
+                  {["Acciones","Ticket","Fecha","Solicitante","Dependencia","Activo","Tipo / Asunto","Estado","Técnico"].map((h) =>
+                    <th key={h} className="px-1.5 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">{h}</th>
+                  )}
+                </tr>
+              </thead>
               <tbody className="divide-y divide-slate-100">
                 {filtradas.map((item) => (
-                  <tr key={item.id}>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm font-bold text-blue-700">{item.numero_ticket}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-600">{new Date(item.fecha_solicitud).toLocaleString("es-CO")}</td>
-                    <td className="min-w-48 px-4 py-3 text-sm text-slate-700"><strong>{item.solicitante_nombre}</strong><div className="mt-1 text-xs text-slate-500">{item.descripcion}</div></td>
-                    <td className="min-w-40 px-4 py-3 text-sm text-slate-600">{item.dependencia_nombre || "—"}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-600">{item.placa_inventario || "No aplica"}</td>
-                    <td className="min-w-52 px-4 py-3 text-sm text-slate-600"><span className="font-semibold">{item.tipo}</span><div>{item.asunto}</div></td>
-                    <td className="px-4 py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">{estadoLabel(item.estado)}</span></td>
-                    <td className="min-w-48 px-4 py-3">
-                      {puedeGestionar && !["RESUELTA","CERRADA","CANCELADA"].includes(item.estado) ? (
-                        <select value={item.tecnico_asignado_id || ""} onChange={(e) => asignar(item, e.target.value)} className="w-full rounded-lg border border-slate-300 px-2 py-2 text-xs">
-                          <option value="">Sin asignar</option>
-                          {tecnicos.map((t) => <option key={t.id} value={t.id}>{nombrePersona(t)}</option>)}
-                        </select>
-                      ) : <span className="text-sm text-slate-600">{item.tecnico_asignado_nombre || "—"}</span>}
-                    </td>
-                    <td className="min-w-64 px-4 py-3">
+                  <tr key={item.id} className="hover:bg-slate-50">
+                    <td className="w-56 px-1.5 py-1.5">
                       {puedeGestionar && (
                         <div className="flex flex-wrap gap-1">
-                          {item.estado === "ASIGNADA" && <button onClick={() => iniciar(item)} className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700">Iniciar</button>}
-                          {!["RESUELTA","CERRADA","CANCELADA"].includes(item.estado) && item.tipo === "SOPORTE" && <button onClick={() => navigate(`/soportes-tecnicos?ticket=${item.id}`)} className="rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700">Registrar soporte</button>}
-                          {!["RESUELTA","CERRADA","CANCELADA"].includes(item.estado) && item.tipo === "MANTENIMIENTO" && <button onClick={() => navigate(`/mantenimientos?ticket=${item.id}`)} className="rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700">Registrar mantenimiento</button>}
-                          {item.estado === "RESUELTA" && <button onClick={() => cerrar(item)} className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700">Cerrar</button>}
-                          {!["CERRADA","CANCELADA"].includes(item.estado) && <button onClick={() => cancelar(item)} className="rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-700">Cancelar</button>}
+                          {item.estado === "PENDIENTE" && <button onClick={() => abrirAsignacion(item)} className="rounded bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-700">Asignar</button>}
+                          {item.estado === "ASIGNADA" && <button onClick={() => iniciar(item)} className="rounded bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">Iniciar</button>}
+                          {["ASIGNADA","EN_PROCESO"].includes(item.estado) && item.tipo === "SOPORTE" && <button onClick={() => navigate(`/soportes-tecnicos?ticket=${item.id}`)} className="rounded bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700">Soporte</button>}
+                          {!["RESUELTA","CERRADA","CANCELADA"].includes(item.estado) && item.tipo === "MANTENIMIENTO" && <button onClick={() => navigate(`/mantenimientos?ticket=${item.id}`)} className="rounded bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700">Mant.</button>}
+                          {item.estado === "RESUELTA" && <button onClick={() => cerrar(item)} className="rounded bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">Cerrar</button>}
+                          {!["CERRADA","CANCELADA"].includes(item.estado) && <button onClick={() => cancelar(item)} className="rounded bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700">Cancelar</button>}
                         </div>
                       )}
                     </td>
+                    <td className="px-1.5 py-1.5 text-xs font-bold text-blue-700">{item.numero_ticket}</td>
+                    <td className="px-1.5 py-1.5 text-xs text-slate-600">{new Date(item.fecha_solicitud).toLocaleString("es-CO")}</td>
+                    <td className="px-1.5 py-1.5 text-xs text-slate-700"><strong>{item.solicitante_nombre}</strong><div className="truncate text-[11px] text-slate-500">{item.descripcion}</div></td>
+                    <td className="px-1.5 py-1.5 text-xs text-slate-600 truncate">{item.dependencia_nombre || "—"}</td>
+                    <td className="px-1.5 py-1.5 text-xs text-slate-600">{item.placa_inventario || "—"}</td>
+                    <td className="px-1.5 py-1.5 text-xs text-slate-600"><strong>{item.tipo}</strong><div className="truncate">{item.asunto}</div></td>
+                    <td className="px-1.5 py-1.5"><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-700">{estadoLabel(item.estado)}</span></td>
+                    <td className="px-1.5 py-1.5 text-xs text-slate-600">{item.tecnico_asignado_nombre || "—"}</td>
                   </tr>
                 ))}
                 {!filtradas.length && <tr><td colSpan={9} className="px-4 py-14 text-center text-sm text-slate-500">No hay solicitudes para los filtros seleccionados.</td></tr>}
               </tbody>
-            </table>
-          </div>
+            </table>          </div>
         )}
       </section>
+      {ticketAsignar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <h2 className="mb-4 text-lg font-bold text-slate-900">Asignar técnico</h2>
+            <select value={tecnicoSeleccionado} onChange={(e)=>setTecnicoSeleccionado(e.target.value)} className="mb-4 w-full rounded-xl border border-slate-300 px-3 py-2">
+              <option value="">Seleccione técnico</option>
+              {tecnicos.map((t)=><option key={t.id} value={t.id}>{nombrePersona(t)}</option>)}
+            </select>
+            <div className="flex justify-end gap-2">
+              <button onClick={()=>setTicketAsignar(null)} className="rounded-lg bg-slate-100 px-4 py-2 text-sm">Cancelar</button>
+              <button onClick={guardarAsignacion} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white">Asignar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

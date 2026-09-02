@@ -361,8 +361,8 @@ export default function SoportesTecnicos() {
       await supabase
         .from("solicitudes_servicio")
         .update({
-          estado: "RESUELTA",
-          fecha_resolucion: new Date().toISOString(),
+          estado: "CERRADA",
+          fecha_cierre: new Date().toISOString(),
           tecnico_asignado_id: form.tecnico_id,
           tecnico_asignado_nombre: nombrePersona(tecnico),
         })

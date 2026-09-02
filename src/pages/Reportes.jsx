@@ -288,6 +288,57 @@ export default function Reportes() {
     URL.revokeObjectURL(url);
   }
 
+  function imprimirPDF() {
+    const filas = filtrados
+      .map((activo) => `
+        <tr>
+          <td>${activo.codigo || ""}</td>
+          <td>${activo.tipos_activo?.nombre || ""}</td>
+          <td>${activo.marcas?.nombre || ""}</td>
+          <td>${activo.modelo || ""}</td>
+          <td>${activo.serial || ""}</td>
+          <td>${etiquetaEstado(activo.estado)}</td>
+          <td>${activo.dependencias?.nombre || ""}</td>
+          <td>${nombrePersona(activo.personas)}</td>
+        </tr>
+      `)
+      .join("");
+
+    const ventana = window.open("", "_blank");
+
+    ventana.document.write(`
+      <html>
+      <head>
+        <title>Reporte SIGAT CMV</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 30px; }
+          h1 { font-size: 20px; }
+          table { width:100%; border-collapse:collapse; }
+          th,td { border:1px solid #ccc; padding:6px; font-size:12px; }
+          th { background:#f1f5f9; }
+        </style>
+      </head>
+      <body>
+        <h1>SIGAT CMV - Reporte de Activos Tecnológicos</h1>
+        <p>Fecha: ${new Date().toLocaleDateString("es-CO")}</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Placa</th><th>Tipo</th><th>Marca</th>
+              <th>Modelo</th><th>Serial</th><th>Estado</th>
+              <th>Dependencia</th><th>Responsable</th>
+            </tr>
+          </thead>
+          <tbody>${filas}</tbody>
+        </table>
+      </body>
+      </html>
+    `);
+    ventana.document.close();
+    ventana.focus();
+    ventana.print();
+  }
+
   return (
     <div className="mx-auto max-w-7xl">
       <section className="mb-7 print:hidden">
@@ -397,11 +448,11 @@ export default function Reportes() {
             <button
               type="button"
               onClick={exportarCSV}
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
               disabled={
                 cargando ||
                 filtrados.length === 0
               }
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
             >
               <Download size={17} />
               Exportar CSV
@@ -409,7 +460,7 @@ export default function Reportes() {
 
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={imprimirPDF}
               className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
             >
               <Printer size={17} />

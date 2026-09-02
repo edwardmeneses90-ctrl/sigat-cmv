@@ -143,6 +143,12 @@ export default function ConceptosBaja() {
     );
   }, [personas]);
 
+  const activosPendientesBaja = useMemo(() => {
+    return activos.filter((activo) =>
+      activo.estado === "PENDIENTE_BAJA"
+    );
+  }, [activos]);
+
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
 
@@ -587,7 +593,7 @@ export default function ConceptosBaja() {
                     >
                       <option value="">Seleccionar activo...</option>
 
-                      {activos.map((item) => (
+                      {activosPendientesBaja.map((item) => (
                         <option key={item.id} value={item.id}>
                           {item.codigo}
                           {item.tipo?.nombre ? ` — ${item.tipo.nombre}` : ""}

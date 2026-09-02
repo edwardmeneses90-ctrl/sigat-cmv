@@ -338,7 +338,7 @@ export default function Sidebar({
             Designed by: EGMS - FANM
           </p>
           <p className="text-[9px] font-semibold uppercase tracking-wide text-blue-200/50">
-            Version 1.3
+            Version 1.4
           </p>
         </div>
       </div>

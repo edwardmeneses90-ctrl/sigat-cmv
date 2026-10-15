@@ -23,6 +23,39 @@ const inicial = {
   observaciones: "",
 };
 
+const BUCKET_PLANILLAS = "sigat-mantenimientos";
+
+async function abrirPlanilla(path) {
+  if (!path) return;
+  const ventana = window.open("about:blank", "_blank");
+  const { data, error } = await supabase.storage
+    .from(BUCKET_PLANILLAS)
+    .createSignedUrl(path, 60 * 10);
+  if (error || !data?.signedUrl) {
+    ventana?.close();
+    throw new Error(error?.message || "No se pudo abrir la planilla.");
+  }
+  if (ventana) ventana.location.href = data.signedUrl;
+  else window.location.href = data.signedUrl;
+}
+
+function nombreArchivoSeguro(nombre) {
+  return String(nombre || "planilla.pdf")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .slice(-100) || "planilla.pdf";
+}
+
+function validarPDF(file) {
+  if (!file) return "";
+  if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+    return "El archivo debe estar en formato PDF.";
+  }
+  if (file.size > 20 * 1024 * 1024) return "El PDF no puede superar 20 MB.";
+  return "";
+}
+
 export default function Mantenimientos() {
   const { perfil } = useAuth();
   const [searchParams] = useSearchParams();
@@ -41,6 +74,10 @@ export default function Mantenimientos() {
   const [mensaje, setMensaje] = useState("");
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  const [detalle, setDetalle] = useState(null);
+  const [editandoDetalle, setEditandoDetalle] = useState(false);
+  const [archivoPDF, setArchivoPDF] = useState(null);
+  const [errorPlanilla, setErrorPlanilla] = useState("");
 
   async function cargar() {
     setCargando(true);
@@ -49,7 +86,7 @@ export default function Mantenimientos() {
     const [resActivos, resPersonas, resMant, resSolicitudes] = await Promise.all([
       supabase
         .from("activos")
-        .select("id, codigo, tipos_activo(nombre), marcas(nombre), modelo")
+        .select("id, codigo, serial, nombre_equipo, tipos_activo(nombre), marcas(nombre), modelo")
         .order("codigo", { ascending: true }),
 
       supabase
@@ -78,6 +115,7 @@ export default function Mantenimientos() {
           repuestos,
           proximo_mantenimiento,
           observaciones,
+          archivo_pdf,
           activos(codigo),
           solicitudes_servicio(numero_ticket)
         `)
@@ -152,6 +190,8 @@ export default function Mantenimientos() {
 
     setError("");
     setMensaje("");
+    setArchivoPDF(null);
+    setErrorPlanilla("");
     setMostrar(true);
   }
 
@@ -162,8 +202,40 @@ export default function Mantenimientos() {
     }));
   }
 
+  function abrirMantenimiento(item) {
+    setDetalle(item);
+    setEditandoDetalle(false);
+    setArchivoPDF(null);
+    setErrorPlanilla("");
+    setError("");
+    setFormulario({
+      solicitud_id: item.solicitud_id || "",
+      origen: "INTERNO",
+      activo_id: item.activo_id,
+      tipo: item.tipo || "PREVENTIVO",
+      fecha_mantenimiento: item.fecha_mantenimiento || "",
+      tecnico_proveedor: item.tecnico_proveedor || "",
+      diagnostico: item.diagnostico || "",
+      trabajo_realizado: item.trabajo_realizado || "",
+      repuestos: item.repuestos || "",
+      proximo_mantenimiento: item.proximo_mantenimiento || "",
+      observaciones: item.observaciones || "",
+    });
+  }
+
   async function guardar(event) {
     event.preventDefault();
+
+    if (!activos.some((activo) => activo.id === formulario.activo_id)) {
+      setError("Busca y selecciona el activo que recibirá el mantenimiento.");
+      return;
+    }
+
+    const errorArchivo = validarPDF(archivoPDF);
+    if (errorArchivo) {
+      setErrorPlanilla(errorArchivo);
+      return;
+    }
 
     setGuardando(true);
     setError("");
@@ -175,6 +247,56 @@ export default function Mantenimientos() {
           .filter(Boolean)
           .join(" ") === formulario.tecnico_proveedor,
     );
+
+    if (detalle && editandoDetalle) {
+      let archivoPath = detalle.archivo_pdf || null;
+      let nuevoArchivoPath = null;
+      if (archivoPDF) {
+        nuevoArchivoPath = `mantenimientos/${detalle.id}/${Date.now()}-${nombreArchivoSeguro(archivoPDF.name)}`;
+        const { error: uploadError } = await supabase.storage
+          .from(BUCKET_PLANILLAS)
+          .upload(nuevoArchivoPath, archivoPDF, { contentType: "application/pdf", upsert: false });
+        if (uploadError) {
+          setError(uploadError.message);
+          setGuardando(false);
+          return;
+        }
+        archivoPath = nuevoArchivoPath;
+      }
+
+      const { error: updateError } = await supabase
+        .from("mantenimientos")
+        .update({
+          activo_id: formulario.activo_id,
+          tipo: formulario.tipo,
+          fecha_mantenimiento: formulario.fecha_mantenimiento,
+          tecnico_proveedor: formulario.tecnico_proveedor.trim() || null,
+          diagnostico: formulario.diagnostico.trim() || null,
+          trabajo_realizado: formulario.trabajo_realizado.trim() || null,
+          repuestos: formulario.repuestos.trim() || null,
+          proximo_mantenimiento: formulario.proximo_mantenimiento || null,
+          observaciones: formulario.observaciones.trim() || null,
+          archivo_pdf: archivoPath,
+        })
+        .eq("id", detalle.id);
+
+      if (updateError) {
+        if (nuevoArchivoPath) await supabase.storage.from(BUCKET_PLANILLAS).remove([nuevoArchivoPath]);
+        setError(updateError.message);
+        setGuardando(false);
+        return;
+      }
+      if (nuevoArchivoPath && detalle.archivo_pdf) {
+        await supabase.storage.from(BUCKET_PLANILLAS).remove([detalle.archivo_pdf]);
+      }
+      setMensaje("Mantenimiento actualizado correctamente.");
+      setDetalle(null);
+      setEditandoDetalle(false);
+      setArchivoPDF(null);
+      setGuardando(false);
+      await cargar();
+      return;
+    }
 
     let solicitudId = formulario.solicitud_id;
     let numeroTicket = "";
@@ -250,11 +372,26 @@ export default function Mantenimientos() {
       registrado_por: perfil?.id || null,
     };
 
+    const nuevoId = crypto.randomUUID();
+    let nuevoArchivoPath = null;
+    if (archivoPDF) {
+      nuevoArchivoPath = `mantenimientos/${nuevoId}/${Date.now()}-${nombreArchivoSeguro(archivoPDF.name)}`;
+      const { error: uploadError } = await supabase.storage
+        .from(BUCKET_PLANILLAS)
+        .upload(nuevoArchivoPath, archivoPDF, { contentType: "application/pdf", upsert: false });
+      if (uploadError) {
+        setError(uploadError.message);
+        setGuardando(false);
+        return;
+      }
+    }
+
     const { error: insertError } = await supabase
       .from("mantenimientos")
-      .insert(payload);
+      .insert({ ...payload, id: nuevoId, archivo_pdf: nuevoArchivoPath });
 
     if (insertError) {
+      if (nuevoArchivoPath) await supabase.storage.from(BUCKET_PLANILLAS).remove([nuevoArchivoPath]);
       setError(insertError.message);
       setGuardando(false);
       return;
@@ -285,6 +422,7 @@ export default function Mantenimientos() {
     });
 
     setMostrar(false);
+    setArchivoPDF(null);
     setGuardando(false);
 
     await cargar();
@@ -363,6 +501,73 @@ export default function Mantenimientos() {
           />
         </div>
 
+        {detalle && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+            <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+              <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-200 bg-white px-6 py-5">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Detalle del mantenimiento</p>
+                  <h3 className="mt-1 text-2xl font-bold text-slate-900">Placa {detalle.activos?.codigo || "—"}</h3>
+                  <p className="mt-1 text-sm text-slate-500">{detalle.fecha_mantenimiento} · {detalle.tipo === "PREVENTIVO" ? "Preventivo" : "Correctivo"}</p>
+                </div>
+                <button type="button" onClick={() => { setDetalle(null); setEditandoDetalle(false); setArchivoPDF(null); }} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Cerrar detalle"><X size={20} /></button>
+              </div>
+
+              {editandoDetalle ? (
+                <form onSubmit={guardar} className="space-y-4 p-6">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Campo label="Fecha *" type="date" value={formulario.fecha_mantenimiento} onChange={(v) => actualizar("fecha_mantenimiento", v)} required />
+                    <SelectorActivo activos={activos} value={formulario.activo_id} onChange={(value) => actualizar("activo_id", value)} />
+                    <label className="text-sm font-medium text-slate-700">Tipo *
+                      <select value={formulario.tipo} onChange={(e) => actualizar("tipo", e.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"><option value="PREVENTIVO">Preventivo</option><option value="CORRECTIVO">Correctivo</option></select>
+                    </label>
+                    <label className="text-sm font-medium text-slate-700">Técnico *
+                      <select required value={formulario.tecnico_proveedor} onChange={(e) => actualizar("tecnico_proveedor", e.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">
+                        <option value="">Seleccionar técnico</option>
+                        {tecnicos.map((persona) => {
+                          const nombre = [persona.nombres, persona.apellidos].filter(Boolean).join(" ");
+                          return <option key={persona.id} value={nombre}>{nombre}</option>;
+                        })}
+                      </select>
+                    </label>
+                    <Campo label="Próximo mantenimiento" type="date" value={formulario.proximo_mantenimiento} onChange={(v) => actualizar("proximo_mantenimiento", v)} />
+                  </div>
+                  <Area label="Diagnóstico" value={formulario.diagnostico} onChange={(v) => actualizar("diagnostico", v)} />
+                  <Area label="Trabajo realizado" value={formulario.trabajo_realizado} onChange={(v) => actualizar("trabajo_realizado", v)} />
+                  <Area label="Repuestos" value={formulario.repuestos} onChange={(v) => actualizar("repuestos", v)} />
+                  <Area label="Observaciones" value={formulario.observaciones} onChange={(v) => actualizar("observaciones", v)} />
+                  <ArchivoPlanilla archivo={archivoPDF} setArchivo={setArchivoPDF} error={errorPlanilla} setError={setErrorPlanilla} existente={detalle.archivo_pdf} onAbrir={abrirPlanilla} />
+                  {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button type="button" onClick={() => { setEditandoDetalle(false); setArchivoPDF(null); setError(""); }} className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600">Cancelar</button>
+                    <button type="submit" disabled={guardando} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">{guardando ? "Guardando..." : "Guardar cambios"}</button>
+                  </div>
+                </form>
+              ) : (
+                <div className="space-y-5 p-6">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Dato label="Ticket" valor={detalle.solicitudes_servicio?.numero_ticket || "—"} />
+                    <Dato label="Tipo" valor={detalle.tipo === "PREVENTIVO" ? "Preventivo" : "Correctivo"} />
+                    <Dato label="Técnico / proveedor" valor={detalle.tecnico_proveedor || "—"} />
+                    <Dato label="Próximo mantenimiento" valor={detalle.proximo_mantenimiento || "—"} />
+                    <Dato label="Diagnóstico" valor={detalle.diagnostico || "—"} />
+                    <Dato label="Trabajo realizado" valor={detalle.trabajo_realizado || "—"} />
+                    <Dato label="Repuestos" valor={detalle.repuestos || "—"} />
+                    <Dato label="Observaciones" valor={detalle.observaciones || "—"} />
+                  </div>
+                  {detalle.archivo_pdf ? (
+                    <button type="button" onClick={() => abrirPlanilla(detalle.archivo_pdf).catch((e) => setError(e.message))} className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-100">Abrir planilla escaneada (PDF)</button>
+                  ) : <p className="text-sm text-slate-500">Este mantenimiento aún no tiene una planilla escaneada adjunta.</p>}
+                  {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+                  <div className="flex justify-end">
+                    {puedeGestionar && <button type="button" onClick={() => { setEditandoDetalle(true); setError(""); }} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">Editar mantenimiento</button>}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {mensaje && (
           <div className="mt-4 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
             <CheckCircle2 size={17} />
@@ -430,31 +635,7 @@ export default function Mantenimientos() {
                 </div>
               )}
 
-              <label className="text-sm font-medium text-slate-700">
-                Activo *
-                <select
-                  required
-                  value={formulario.activo_id}
-                  onChange={(e) =>
-                    actualizar("activo_id", e.target.value)
-                  }
-                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
-                >
-                  <option value="">
-                    Seleccionar activo
-                  </option>
-
-                  {activos.map((activo) => (
-                    <option
-                      key={activo.id}
-                      value={activo.id}
-                    >
-                      {activo.codigo} —{" "}
-                      {activo.tipos_activo?.nombre || ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <SelectorActivo activos={activos} value={formulario.activo_id} onChange={(value) => actualizar("activo_id", value)} />
 
               <label className="text-sm font-medium text-slate-700">
                 Tipo *
@@ -569,6 +750,8 @@ export default function Mantenimientos() {
               }
             />
 
+            <ArchivoPlanilla archivo={archivoPDF} setArchivo={setArchivoPDF} error={errorPlanilla} setError={setErrorPlanilla} onAbrir={abrirPlanilla} />
+
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
@@ -642,8 +825,10 @@ export default function Mantenimientos() {
                       {item.solicitudes_servicio?.numero_ticket || "—"}
                     </td>
 
-                    <td className="px-4 py-3 text-sm font-semibold text-blue-700">
-                      {item.activos?.codigo || "—"}
+                    <td className="px-4 py-3 text-sm font-semibold">
+                      <button type="button" onClick={() => abrirMantenimiento(item)} className="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900" title="Ver detalle del mantenimiento">
+                        {item.activos?.codigo || "—"}
+                      </button>
                     </td>
 
                     <td className="px-4 py-3 text-sm text-slate-700">
@@ -711,6 +896,132 @@ function Area({ label, value, onChange }) {
         onChange={(e) => onChange(e.target.value)}
         className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
       />
+    </label>
+  );
+}
+
+function ArchivoPlanilla({ archivo, setArchivo, error, setError, existente, onAbrir }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <label className="block text-sm font-medium text-slate-700">
+        Planilla escaneada (PDF)
+        <input
+          type="file"
+          accept="application/pdf,.pdf"
+          onChange={(e) => {
+            const file = e.target.files?.[0] || null;
+            const validation = validarPDF(file);
+            setError(validation);
+            setArchivo(validation ? null : file);
+          }}
+          className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:font-semibold file:text-blue-700"
+        />
+      </label>
+      <p className="mt-2 text-xs text-slate-500">Adjunta el PDF escaneado de la planilla firmada. Tamaño máximo: 20 MB.</p>
+      {archivo && <p className="mt-2 text-sm text-emerald-700">Archivo seleccionado: {archivo.name}</p>}
+      {!archivo && existente && (
+        <button type="button" onClick={() => onAbrir(existente).catch(() => {})} className="mt-2 text-sm font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-900">Ver planilla PDF actual</button>
+      )}
+      {error && <p className="mt-2 text-sm text-red-700">{error}</p>}
+    </div>
+  );
+}
+
+function Dato({ label, valor }) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{valor}</p>
+    </div>
+  );
+}
+
+function normalizarBusquedaActivo(valor) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function SelectorActivo({ activos, value, onChange }) {
+  const [busqueda, setBusqueda] = useState("");
+  const [abierto, setAbierto] = useState(false);
+  const seleccionado = activos.find((activo) => activo.id === value);
+  const etiquetaSeleccionada = seleccionado
+    ? [seleccionado.codigo, seleccionado.tipos_activo?.nombre, seleccionado.marcas?.nombre, seleccionado.modelo]
+        .filter(Boolean)
+        .join(" — ")
+    : "";
+  const filtro = normalizarBusquedaActivo(busqueda.trim());
+  const resultados = activos
+    .filter((activo) => {
+      if (!filtro) return true;
+      const datos = [activo.codigo, activo.serial, activo.nombre_equipo, activo.tipos_activo?.nombre, activo.marcas?.nombre, activo.modelo]
+        .map(normalizarBusquedaActivo)
+        .join(" ");
+      return datos.includes(filtro);
+    })
+    .slice(0, 12);
+
+  return (
+    <label className="relative block text-sm font-medium text-slate-700">
+      Activo *
+      <div className="relative mt-2">
+        <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          type="text"
+          required={!value}
+          autoComplete="off"
+          value={abierto ? busqueda : etiquetaSeleccionada}
+          onFocus={() => { setBusqueda(""); setAbierto(true); }}
+          onBlur={() => setAbierto(false)}
+          onChange={(event) => {
+            setBusqueda(event.target.value);
+            setAbierto(true);
+            onChange("");
+          }}
+          placeholder="Escribe placa, serial, tipo o modelo..."
+          aria-label="Buscar activo para mantenimiento"
+          aria-expanded={abierto}
+          className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        />
+      </div>
+      {abierto && (
+        <div className="absolute left-0 right-0 z-30 mt-1 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
+          {resultados.length ? resultados.map((activo) => (
+            <button
+              key={activo.id}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onChange(activo.id);
+                setBusqueda("");
+                setAbierto(false);
+              }}
+              className="w-full px-3 py-2.5 text-left hover:bg-blue-50"
+            >
+              <span className="block font-semibold text-slate-800">{activo.codigo}</span>
+              <span className="mt-0.5 block text-xs font-normal text-slate-500">
+                {[activo.tipos_activo?.nombre, activo.marcas?.nombre, activo.modelo, activo.serial ? `Serial ${activo.serial}` : ""]
+                  .filter(Boolean)
+                  .join(" · ") || activo.nombre_equipo || "Activo tecnológico"}
+              </span>
+            </button>
+          )) : (
+            <p className="px-3 py-3 text-sm font-normal text-slate-500">No hay activos que coincidan con la búsqueda.</p>
+          )}
+        </div>
+      )}
+      {seleccionado && !abierto && (
+        <span className="mt-2 block rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-normal text-emerald-800">
+          <span className="block font-semibold">Activo seleccionado: {seleccionado.codigo}</span>
+          <span className="mt-0.5 block">
+            {[seleccionado.tipos_activo?.nombre, seleccionado.marcas?.nombre, seleccionado.modelo, seleccionado.serial ? `Serial ${seleccionado.serial}` : ""]
+              .filter(Boolean)
+              .join(" · ") || seleccionado.nombre_equipo || "Sin datos adicionales"}
+          </span>
+        </span>
+      )}
     </label>
   );
 }

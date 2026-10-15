@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   Monitor,
@@ -11,6 +11,22 @@ import {
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import HojaVidaImprimible from "../components/activos/HojaVidaImprimible";
+import { useSearchParams } from "react-router-dom";
+
+const BUCKET_PLANILLAS = "sigat-mantenimientos";
+
+async function abrirPlanillaMantenimiento(path) {
+  const ventana = window.open("about:blank", "_blank");
+  const { data, error } = await supabase.storage
+    .from(BUCKET_PLANILLAS)
+    .createSignedUrl(path, 60 * 10);
+  if (error || !data?.signedUrl) {
+    ventana?.close();
+    throw new Error(error?.message || "No se pudo abrir la planilla escaneada.");
+  }
+  if (ventana) ventana.location.href = data.signedUrl;
+  else window.location.href = data.signedUrl;
+}
 
 const ESTADOS = [
   ["DISPONIBLE", "Disponible"],
@@ -70,6 +86,8 @@ function nombrePersona(persona) {
 
 export default function Activos() {
   const { perfil } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activoAbiertoDesdeBusqueda = useRef("");
   const puedeGestionar =
     perfil?.rol === "ADMIN" || perfil?.rol === "TECNICO";
 
@@ -195,6 +213,7 @@ export default function Activos() {
           costo,
           proximo_mantenimiento,
           observaciones,
+          archivo_pdf,
           solicitudes_servicio(numero_ticket)
         `)
         .eq("activo_id", activo.id),
@@ -253,9 +272,19 @@ export default function Activos() {
 
     setSoportesActivo(soportesVigentes);
 
+    const mantenimientosConEnlace = await Promise.all(
+      (mantRes.data || []).map(async (mantenimiento) => {
+        if (!mantenimiento.archivo_pdf) return mantenimiento;
+        const { data } = await supabase.storage
+          .from(BUCKET_PLANILLAS)
+          .createSignedUrl(mantenimiento.archivo_pdf, 60 * 60);
+        return { ...mantenimiento, archivo_pdf_url: data?.signedUrl || "" };
+      }),
+    );
+
     setDatosReporte({
       movimientos: movRes.data || [],
-      mantenimientos: mantRes.data || [],
+      mantenimientos: mantenimientosConEnlace,
       soportes: soportesVigentes,
     });
 
@@ -277,7 +306,7 @@ export default function Activos() {
         observaciones: item.observaciones || "",
       })),
 
-      ...(mantRes.data || []).map((item) => ({
+      ...mantenimientosConEnlace.map((item) => ({
         id: `mant-${item.id}`,
         fecha: `${item.fecha_mantenimiento}T12:00:00`,
         categoria: "Mantenimiento",
@@ -305,6 +334,7 @@ export default function Activos() {
           .filter(Boolean)
           .join(" | "),
         observaciones: item.observaciones || "",
+        archivo_pdf: item.archivo_pdf,
       })),
 
 
@@ -364,6 +394,24 @@ export default function Activos() {
     setHistorial(eventos);
     setCargandoHistorial(false);
   }
+
+  useEffect(() => {
+    const activoId = searchParams.get("activo");
+    if (!activoId) {
+      activoAbiertoDesdeBusqueda.current = "";
+      return;
+    }
+    if (cargando || activoAbiertoDesdeBusqueda.current === activoId) return;
+
+    const activoEncontrado = activos.find((item) => item.id === activoId);
+    if (!activoEncontrado) return;
+
+    activoAbiertoDesdeBusqueda.current = activoId;
+    void abrirDetalle(activoEncontrado);
+    const parametros = new URLSearchParams(searchParams);
+    parametros.delete("activo");
+    setSearchParams(parametros, { replace: true });
+  }, [searchParams, setSearchParams, activos, cargando]);
 
   function abrirNuevo() {
     setFormulario(formularioInicial);
@@ -1019,6 +1067,15 @@ export default function Activos() {
                           <p className="mt-2 text-sm italic text-slate-500">
                             Observación: {evento.observaciones}
                           </p>
+                        )}
+                        {evento.archivo_pdf && (
+                          <button
+                            type="button"
+                            onClick={() => abrirPlanillaMantenimiento(evento.archivo_pdf).catch((e) => setErrorHistorial(e.message))}
+                            className="mt-3 inline-flex text-sm font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-900"
+                          >
+                            Ver planilla escaneada (PDF)
+                          </button>
                         )}
                       </div>
                     ))}

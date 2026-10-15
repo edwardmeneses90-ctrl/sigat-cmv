@@ -101,6 +101,7 @@ export default function HojaVidaImprimible({ activo, movimientos = [], mantenimi
         .filter(Boolean)
         .join(". "),
       realizadoPor: m.tecnico_proveedor || "",
+      archivo_pdf_url: m.archivo_pdf_url || "",
     })),
 
     ...soportes
@@ -229,6 +230,7 @@ export default function HojaVidaImprimible({ activo, movimientos = [], mantenimi
             font-size: 9pt;
             font-weight: 700;
           }
+          .hv-link { color: #164e9a !important; text-decoration: underline !important; }
         }
       `}</style>
 
@@ -283,7 +285,7 @@ export default function HojaVidaImprimible({ activo, movimientos = [], mantenimi
           </tr></thead>
           <tbody>
             {eventosPagina2.map((e) => <tr key={e.id} className="hv-event-row">
-              <td>{fecha(e.fecha)}</td><td>{e.tipo}</td><td>{e.descripcion}</td><td>{e.realizadoPor}</td><td></td>
+              <td>{fecha(e.fecha)}</td><td>{e.tipo}</td><td>{e.descripcion}{e.archivo_pdf_url ? <><br /><a className="hv-link" href={e.archivo_pdf_url} target="_blank" rel="noreferrer">Ver planilla escaneada (PDF)</a></> : null}</td><td>{e.realizadoPor}</td><td></td>
             </tr>)}
             {filasVacias(Math.max(0, 13 - eventosPagina2.length), 5)}
           </tbody>
@@ -295,7 +297,7 @@ export default function HojaVidaImprimible({ activo, movimientos = [], mantenimi
         <table className="hv-events">
           <tbody>
             {eventosPagina3.map((e) => <tr key={e.id} className="hv-event-row">
-              <td className="date">{fecha(e.fecha)}</td><td className="type">{e.tipo}</td><td className="desc">{e.descripcion}</td><td className="doneby">{e.realizadoPor}</td><td className="sign"></td>
+              <td className="date">{fecha(e.fecha)}</td><td className="type">{e.tipo}</td><td className="desc">{e.descripcion}{e.archivo_pdf_url ? <><br /><a className="hv-link" href={e.archivo_pdf_url} target="_blank" rel="noreferrer">Ver planilla escaneada (PDF)</a></> : null}</td><td className="doneby">{e.realizadoPor}</td><td className="sign"></td>
             </tr>)}
             {filasVacias(Math.max(0, 8 - eventosPagina3.length), 5)}
           </tbody>
